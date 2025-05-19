@@ -1352,10 +1352,17 @@ func installSecrets(args []string) error {
 			if err != nil {
 				return fmt.Errorf("cannot read keyfile '%s': %w", manifest.AgeKeyFile, err)
 			}
+			if len(contents) == 0 {
+				return fmt.Errorf("empty keyfile: '%s'", manifest.AgeKeyFile)
+			}
 			// Append it to the file
 			_, err = ageFile.WriteString(string(contents) + "\n")
 			if err != nil {
 				return fmt.Errorf("cannot write key to age file: %w", err)
+			}
+
+			if manifest.Logging.KeyImport {
+				fmt.Fprintf(os.Stderr, "%s: Imported all keys from keyfile '%s'\n", path.Base(os.Args[0]),manifest.AgeKeyFile)
 			}
 		}
 	}
