@@ -988,6 +988,20 @@ $ for i in *.gpg; do echo "$(basename $i .gpg): |\n$(pass $(dirname $i)/$(basena
 
 Copy the output to the editor you have opened with sops.
 
+## Use age plugins
+
+There are several age plugins available in nixpkgs. Do the following to use them with sops-nix:
+
+1. Add the plugin packages to option `sops.age.plugins`
+2. Install them with `environment.systemPackages`
+3. Generate age keys using the plugins
+  * For age-plugin-yubikey, run age-plugin-yubikey and follow prompts (see [guide](https://github.com/str4d/age-plugin-yubikey%5D))
+  * For age-plugin-fido2-hmac, run age-plugin-fido2-hmac -g (see [guide](https://github.com/olastor/age-plugin-fido2-hmac?tab=readme-ov-file#generate-a-new-recpientidentity))
+  * For better reliability, make sure to generate keys that *DO NOT* require a PIN, as the plugins will not be able to get keyboard access in order to receive the pin when booting up a system.
+4. Save the age identities of the keys so sops can find them
+  * Set the option `sops.age.keyFile` to point to your keys, or save them to where sops will find them by default:
+    * For home-manager: `~/.config/sops/age/keys.txt`
+
 ## Real-world examples
 
 The [nix-community infra](https://github.com/nix-community/infra) makes extensive usage of sops-nix.
