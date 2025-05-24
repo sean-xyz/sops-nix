@@ -61,6 +61,11 @@
             ;
           # backward compatibility
           inherit (prev) ssh-to-pgp;
+
+          sops = prev.sops.withAgePlugins (p: [
+              p.age-plugin-fido2-hmac
+              p.age-plugin-tpm
+          ]);
         };
       nixosModules = {
         sops = ./modules/sops;
