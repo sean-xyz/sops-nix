@@ -463,7 +463,7 @@ in
         after = [ "systemd-sysusers.service" ];
         environment = cfg.environment;
         unitConfig.DefaultDependencies = "no";
-        path = cfg.age.plugins;
+        path = lib.mkForce cfg.age.plugins;
 
         serviceConfig = {
           Type = "oneshot";
