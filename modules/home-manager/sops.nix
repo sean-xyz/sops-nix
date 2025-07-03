@@ -117,14 +117,17 @@ let
 
   escapedAgeKeyFile = lib.escapeShellArg cfg.age.keyFile;
 
+  ageKeygenCommand = "${pkgs.age}/bin/age-keygen -o ${escapedAgeKeyFile}";
+  agePluginTpmKeygenCommand = "${pkgs.age-plugin-tpm}/bin/age-plugin-tpm --generate -o ${escapedAgeKeyFile}";
+
   script = toString (
     pkgs.writeShellScript "sops-nix-user" (
       lib.optionalString cfg.age.generateKey ''
         if [[ ! -f ${escapedAgeKeyFile} ]]; then
-          echo generating machine-specific age key...
+          echo generating machine-specific ${cfg.age.generateKeyType} key...
           ${pkgs.coreutils}/bin/mkdir -p $(${pkgs.coreutils}/bin/dirname ${escapedAgeKeyFile})
-          # age-keygen sets 0600 by default, no need to chmod.
-          ${pkgs.age}/bin/age-keygen -o ${escapedAgeKeyFile}
+          # age-keygen and age-plugin-tpm set 0600 by default, no need to chmod.
+          ${if cfg.age.generateKeyType == "age-plugin-tpm" then agePluginTpmKeygenCommand else ageKeygenCommand}
         fi
       ''
       + ''
@@ -264,6 +267,14 @@ in
           Whether or not to generate the age key. If this
           option is set to false, the key must already be
           present at the specified location.
+        '';
+      };
+
+      generateKeyType = lib.mkOption {
+        type = lib.types.enum [ "age" "age-plugin-tpm" ];
+        default = "age";
+        description = ''
+          Type of key for <literal>config.sops.age.generateKey</literal> to generate.
         '';
       };
 
