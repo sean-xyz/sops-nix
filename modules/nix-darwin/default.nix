@@ -158,6 +158,10 @@ let
   ];
 
   escapedKeyFile = lib.escapeShellArg cfg.age.keyFile;
+
+  ageKeygenCommand = "${pkgs.age}/bin/age-keygen -o ${escapedKeyFile}";
+  agePluginTpmKeygenCommand = "${pkgs.age-plugin-tpm}/bin/age-plugin-tpm --generate -o ${escapedKeyFile}";
+
   # Skip ssh keys deployed with sops to avoid a catch 22
   defaultImportKeys =
     algo:
@@ -170,10 +174,10 @@ let
       if cfg.age.generateKey then
         ''
           if [[ ! -f ${escapedKeyFile} ]]; then
-            echo generating machine-specific age key...
+            echo generating machine-specific ${cfg.age.generateKeyType} key...
             mkdir -p "$(dirname ${escapedKeyFile})"
             # age-keygen sets 0600 by default, no need to chmod.
-            ${pkgs.age}/bin/age-keygen -o ${escapedKeyFile}
+            ${if cfg.age.generateKeyType == "age-plugin-tpm" then agePluginTpmKeygenCommand else ageKeygenCommand}
           fi
         ''
       else
@@ -351,6 +355,10 @@ in
           {
             assertion = !(cfg.gnupg.home != null && cfg.gnupg.sshKeyPaths != [ ]);
             message = "Exactly one of sops.gnupg.home and sops.gnupg.sshKeyPaths must be set";
+          }
+          {
+            assertion = !(cfg.age.generateKeyType == "age-plugin-tpm" && !config.security.tpm2.enable);
+            message = ''security.tpm2.enable must be true for sops.age.generateKeyType is set to "age-plugin-tpm"'';
           }
         ]
         ++ lib.optionals cfg.validateSopsFiles (

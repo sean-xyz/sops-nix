@@ -1,4 +1,4 @@
-{ lib, testers }:
+{ config, lib, testers }:
 let
   testAssets = ../pkgs/sops-install-secrets/test-assets;
 
@@ -224,6 +224,65 @@ in
     testScript = ''
       start_all()
       machine.succeed("cat /run/secrets/test_key | grep -q test_value")
+    '';
+  };
+
+  age-plugin-tpm-keys = testers.runNixOSTest {
+    name = "sops-age-plugin-tpm-keys";
+    nodes.machine = {
+      config,
+      lib,
+      # modulesPath,
+      pkgs,
+      ...
+    }: {
+      imports = [
+        ../modules/sops
+        # (modulesPath + "/virtualisation/qemu-vm.nix")
+      ];
+
+
+      boot = {
+        initrd.systemd.enable = true;
+        kernelPackages = pkgs.linuxPackages_latest;
+      };
+
+      environment = {
+        systemPackages = [
+          pkgs.swtpm
+          pkgs.tpm2-tss
+        ];
+        variables = {
+          AGE_TPM_SWTPM = "1";
+        };
+      };
+
+      security.tpm2 = {
+        enable = true;
+        pkcs11.enable = true;
+        tctiEnvironment.enable = true;
+      };
+
+      virtualisation.tpm.enable = true;
+
+      sops = {
+        defaultSopsFile = testAssets + "/secrets.yaml";
+        secrets.test_key = { };
+        # Generate a key and append it to make sure it appending doesn't break anything
+        age = {
+          keyFile = "/tmp/testkey";
+          generateKey = true;
+          generateKeyType = "age-plugin-tpm";
+        };
+      };
+    };
+
+    testScript = ''
+      start_all()
+
+      machine.succeed("test -f /tmp/testkey")
+      machine.succeed("cat /tmp/testkey | grep -q 'age1tpm1'")
+      machine.succeed("cat /tmp/testkey | grep -q 'AGE-PLUGIN-TPM-1QYQ'")
     '';
   };
 

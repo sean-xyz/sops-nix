@@ -348,6 +348,14 @@ in
         '';
       };
 
+      generateKeyType = lib.mkOption {
+        type = lib.types.enum [ "age" "age-plugin-tpm" ];
+        default = "age";
+        description = ''
+          Type of key for <literal>config.sops.age.generateKey</literal> to generate.
+        '';
+      };
+
       sshKeyPaths = lib.mkOption {
         type = lib.types.listOf lib.types.path;
         default = defaultImportKeys "ed25519";
@@ -421,6 +429,10 @@ in
             assertion = !(cfg.gnupg.home != null && cfg.gnupg.sshKeyPaths != [ ]);
             message = "Exactly one of sops.gnupg.home and sops.gnupg.sshKeyPaths must be set";
           }
+          {
+            assertion = !(cfg.age.generateKeyType == "age-plugin-tpm" && !config.security.tpm2.enable);
+            message = ''security.tpm2.enable must be true for sops.age.generateKeyType is set to "age-plugin-tpm"'';
+          }
         ]
         ++ lib.optionals cfg.validateSopsFiles (
           lib.concatLists (
@@ -479,14 +491,17 @@ in
         generate-age-key =
           let
             escapedKeyFile = lib.escapeShellArg cfg.age.keyFile;
+
+            ageKeygenCommand = "${pkgs.age}/bin/age-keygen -o ${escapedKeyFile}";
+            agePluginTpmKeygenCommand = "${pkgs.age-plugin-tpm}/bin/age-plugin-tpm --generate -o ${escapedKeyFile}";
           in
           lib.mkIf cfg.age.generateKey (
             lib.stringAfter [ ] ''
               if [[ ! -f ${escapedKeyFile} ]]; then
-                echo generating machine-specific age key...
+                echo generating machine-specific ${cfg.age.generateKeyType} key...
                 mkdir -p $(dirname ${escapedKeyFile})
-                # age-keygen sets 0600 by default, no need to chmod.
-                ${pkgs.age}/bin/age-keygen -o ${escapedKeyFile}
+                # age-keygen and age-plugin-tpm set 0600 by default, no need to chmod.
+                ${if cfg.age.generateKeyType == "age-plugin-tpm" then agePluginTpmKeygenCommand else ageKeygenCommand}
               fi
             ''
           );
