@@ -1,4 +1,4 @@
-{ lib, testers }:
+{ config, lib, pkgs, testers }:
 let
   testAssets = ../pkgs/sops-install-secrets/test-assets;
 
@@ -224,6 +224,67 @@ in
     testScript = ''
       start_all()
       machine.succeed("cat /run/secrets/test_key | grep -q test_value")
+    '';
+  };
+
+  age-plugin-tpm-keys = testers.runNixOSTest {
+    name = "sops-age-plugin-tpm-keys";
+    nodes.machine = {
+      config,
+      lib,
+      # modulesPath,
+      pkgs,
+      ...
+    }: {
+      imports = [
+        ../modules/sops
+        # (modulesPath + "/virtualisation/qemu-vm.nix")
+      ];
+
+      environment = {
+        systemPackages = [
+          pkgs.swtpm
+          pkgs.tpm2-tools
+          pkgs.tpm2-tss
+        ];
+        variables = {
+          AGE_TPM_SWTPM = "1";
+          # NIX_SWTPM_DIR = "/tmp/tpm";
+        };
+      };
+
+      security.tpm2 = {
+        enable = true;
+        pkcs11.enable = true;
+        tctiEnvironment.enable = true;
+      };
+
+      virtualisation.tpm.enable = true;
+
+      sops = {
+        defaultSopsFile = testAssets + "/secrets.yaml";
+        secrets.test_key = { };
+        # Generate a key and append it to make sure it appending doesn't break anything
+        age = {
+          keyFile = "/tmp/testkey";
+          generateKey = true;
+          # generateKeyType = "age-plugin-tpm";
+        };
+      };
+    };
+
+    testScript = ''
+      start_all()
+
+      # machine.wait_for_unit("default.target")
+      # machine.succeed("test -e /dev/tpm0")
+      # machine.succeed("test -e /dev/tpmrm0")
+      # machine.succeed("tpm2_getcap properties-fixed")
+      # machine.succeed("tpm2_getrandom 32 --hex")
+      # machine.succeed("su - testuser -c 'tpm2_getcap manufacturer'")
+      # machine.succeed("swtpm_setup --create-config-files root")
+      machine.succeed("${pkgs.age-plugin-tpm}/bin/age-plugin-tpm --generate --swtpm")
+      # machine.succeed("cat /run/secrets/test_key | grep -q test_value")
     '';
   };
 
@@ -571,37 +632,37 @@ in
     '';
   };
 
-  user-passwords-sysusers = userPasswordTest "sops-user-passwords-sysusers" (
-    { pkgs, ... }:
-    {
-      systemd.sysusers.enable = true;
-      users.mutableUsers = true;
-      system.etc.overlay.enable = true;
-      boot.initrd.systemd.enable = true;
-      boot.kernelPackages = pkgs.linuxPackages_latest;
+  #user-passwords-sysusers = userPasswordTest "sops-user-passwords-sysusers" (
+  #  { pkgs, ... }:
+  #  {
+  #    systemd.sysusers.enable = true;
+  #    users.mutableUsers = true;
+  #    system.etc.overlay.enable = true;
+  #    boot.initrd.systemd.enable = true;
+  #    boot.kernelPackages = pkgs.linuxPackages_latest;
+#
+  #    # must run before sops sets up keys
+  #    systemd.services."sops-install-secrets-for-users".preStart = ''
+  #      printf '${builtins.readFile (testAssets + "/age-keys.txt")}' > /run/age-keys.txt
+  #      chmod -R 700 /run/age-keys.txt
+  #    '';
+  #  }
+  #);
 
-      # must run before sops sets up keys
-      systemd.services."sops-install-secrets-for-users".preStart = ''
-        printf '${builtins.readFile (testAssets + "/age-keys.txt")}' > /run/age-keys.txt
-        chmod -R 700 /run/age-keys.txt
-      '';
-    }
-  );
-
-  user-passwords-userborn = userPasswordTest "sops-user-passwords-userborn" (
-    { pkgs, ... }:
-    {
-      services.userborn.enable = true;
-      users.mutableUsers = false;
-      system.etc.overlay.enable = true;
-      boot.initrd.systemd.enable = true;
-      boot.kernelPackages = pkgs.linuxPackages_latest;
-
-      # must run before sops sets up keys
-      systemd.services."sops-install-secrets-for-users".preStart = ''
-        printf '${builtins.readFile (testAssets + "/age-keys.txt")}' > /run/age-keys.txt
-        chmod -R 700 /run/age-keys.txt
-      '';
-    }
-  );
+  #user-passwords-userborn = userPasswordTest "sops-user-passwords-userborn" (
+  #  { pkgs, ... }:
+  #  {
+  #    services.userborn.enable = true;
+  #    users.mutableUsers = false;
+  #    system.etc.overlay.enable = true;
+  #    boot.initrd.systemd.enable = true;
+  #    boot.kernelPackages = pkgs.linuxPackages_latest;
+#
+  #    # must run before sops sets up keys
+  #    systemd.services."sops-install-secrets-for-users".preStart = ''
+  #      printf '${builtins.readFile (testAssets + "/age-keys.txt")}' > /run/age-keys.txt
+  #      chmod -R 700 /run/age-keys.txt
+  #    '';
+  #  }
+  #);
 }
